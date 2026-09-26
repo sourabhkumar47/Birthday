@@ -1,0 +1,9 @@
+# Netlify: let phones keep photos, music and libraries instead of re-checking them on every view
+/assets/photos/*
+  Cache-Control: public, max-age=3600
+/assets/music/*
+  Cache-Control: public, max-age=3600
+/assets/sfx/*
+  Cache-Control: public, max-age=86400
+/vendor/*
+  Cache-Control: public, max-age=86400

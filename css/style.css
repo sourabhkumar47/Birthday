@@ -410,3 +410,18 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   .garland { display: flex; }
 }
 @media (min-width: 700px) { .karaoke { top: max(190px, calc(env(safe-area-inset-top) + 182px)); } }
+
+/* ---------- "photo is cooking" placeholder while an image downloads ---------- */
+.cooking, .modal-photo img, .float-photo img {
+  background-image: linear-gradient(125deg, #ff9ec7, #c9b6ff, #9fe3ff, #b8f2c9, #ffd27a, #ff8fb8, #c9b6ff) !important;
+  background-size: 400% 400% !important;
+  animation: cook 2.2s ease-in-out infinite;
+}
+.cooking { position: relative; overflow: hidden; }
+.cooking::before { content: "💗"; position: absolute; left: 50%; top: 50%; font-size: 24px; transform: translate(-50%, -50%); animation: cookHeart 0.9s ease-in-out infinite; filter: drop-shadow(0 2px 6px rgba(255,255,255,.8)); z-index: 1; }
+.cooking::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 25%, rgba(255,255,255,.6) 50%, transparent 75%); transform: translateX(-110%); animation: cookShine 1.2s ease-in-out infinite; }
+.mini-img.cooking::before { font-size: 18px; }
+.flip-front .polaroid-img.cooking::before { font-size: 44px; }
+@keyframes cook { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes cookHeart { 50% { transform: translate(-50%, -50%) scale(1.35) rotate(-8deg); } }
+@keyframes cookShine { to { transform: translateX(110%); } }

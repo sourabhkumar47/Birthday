@@ -27,7 +27,7 @@
     init() {
       this.music = this.track(CFG.music);
       this.music.volume = BASE_VOL;
-      if (CFG.memoriesMusic) this.track(CFG.memoriesMusic); // preload
+      if (CFG.memoriesMusic) this.track(CFG.memoriesMusic).preload = "metadata"; // just check it exists; stream it later
       this.popEl = new Audio("assets/sfx/pop.mp3");
       this.popEl.volume = 0.35;
       try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}

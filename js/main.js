@@ -103,6 +103,45 @@
     return p;
   }
 
+  // ---- fast photo loading: small thumbnails everywhere, full size only in the big viewer ----
+  const thumb = (src) => (src && src.includes("/gallery/") ? src.replace("/gallery/", "/thumbs/") : src);
+  const imgCache = new Map(), readySet = new Set(), keepAlive = [];
+  function preload(src) {
+    if (!src) return Promise.resolve(false);
+    if (!imgCache.has(src)) {
+      imgCache.set(src, new Promise((res) => {
+        const im = new Image();
+        im.decoding = "async";
+        im.onload = () => (im.decode ? im.decode().catch(() => {}) : Promise.resolve()).then(() => { readySet.add(src); res(true); });
+        im.onerror = () => res(false);
+        im.src = src;
+        keepAlive.push(im); // keep decoded images in memory so they show instantly
+      }));
+    }
+    return imgCache.get(src);
+  }
+  // quietly download all thumbnails in the background (4 at a time), memory photos first
+  let warmed = false;
+  function warmPhotos() {
+    if (warmed) return;
+    warmed = true;
+    poolReady.then(() => {
+      const queue = [...new Set([...CFG.memories.map((m) => thumb(m.photo)), ...pool.map(thumb)])];
+      let i = 0;
+      const nextOne = () => { if (i < queue.length) preload(queue[i++]).then(nextOne); };
+      for (let k = 0; k < 4; k++) nextOne();
+    });
+  }
+  // prefer photos that are already downloaded, so nothing flips to an empty frame
+  function randomReadyPhoto(avoid = []) {
+    const ready = pool.filter((p) => readySet.has(thumb(p)) && !avoid.includes(p) && !recent.includes(p));
+    if (!ready.length) return randomPhoto(avoid);
+    const p = pick(ready);
+    recent.push(p);
+    if (recent.length > Math.min(8, Math.floor(pool.length / 2))) recent.shift();
+    return p;
+  }
+
   /* ---------------- modal ---------------- */
   let modalCb = null;
   const popIn = (el) => gsap.fromTo(el, { scale: 0.4, rotation: -8, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 0.7, ease: "elastic.out(1,0.6)" });
@@ -118,7 +157,7 @@
     t.classList.toggle("long", text.length > 170);
     $("#modalBtn").textContent = btn;
     $("#modalPhoto").hidden = !photo;
-    if (photo) $("#modalImg").src = photo;
+    if (photo) $("#modalImg").src = thumb(photo);
     modalCb = onClose;
     $("#modal").hidden = false;
     $("#modal").scrollTop = 0;
@@ -147,6 +186,7 @@
   gsap.from("#ch-gate .hint", { opacity: 0, duration: 1, delay: 1 });
   $("#startBtn").onclick = (e) => {
     FX.audio.start();
+    warmPhotos();
     musicBtn.hidden = false;
     const r = e.currentTarget.getBoundingClientRect();
     FX.floatEmoji(r.left + r.width / 2, r.top + r.height / 2, ["💖", "💗", "💕", "✨"], 14);
@@ -227,13 +267,13 @@
           $("#popCount").textContent = count;
           gsap.fromTo(".counter", { scale: 1.3 }, { scale: 1, duration: 0.5, ease: "elastic.out(1,0.4)" });
           $("#playHint").textContent = count < total ? `${total - count} more to go 🎈` : "wait for it… 👀";
-          setTimeout(() => showModal({ tag: `love note ${count} of ${total}`, emoji: "💌", text: CFG.balloonNotes[count - 1], photo: randomPhoto(), btn: count < total ? "keep popping 🎈" : "yay! 💖" }), 350);
+          setTimeout(() => showModal({ tag: `love note ${count} of ${total}`, emoji: "💌", text: CFG.balloonNotes[count - 1], photo: randomReadyPhoto(), btn: count < total ? "keep popping 🎈" : "yay! 💖" }), 350);
         },
         onGiftShown() { $("#playHint").textContent = "a gift just landed… tap it! 🎁"; FX.audio.chime([523, 784, 1047]); },
         onGiftOpened() {
           FX.celebrate(true);
           $("#playHint").textContent = "🎁 surprise unlocked!";
-          setTimeout(() => showModal({ tag: "surprise unlocked", emoji: "🎁", text: "You found the gift! Inside it: every memory we've made together. Come see… 📸", photo: randomPhoto(), btn: "take me there 💞", onClose: next }), 1200);
+          setTimeout(() => showModal({ tag: "surprise unlocked", emoji: "🎁", text: "You found the gift! Inside it: every memory we've made together. Come see… 📸", photo: randomReadyPhoto(), btn: "take me there 💞", onClose: next }), 1200);
         },
       });
     }
@@ -260,13 +300,20 @@
   function spawnFloater(slot) {
     if (!floatOn) return;
     const shown = Array.from(floatLayer.children).map((e) => e.dataset.src);
-    const src = randomPhoto(shown);
+    const src = randomReadyPhoto(shown);
+    preload(thumb(src)).then((ok) => {
+      if (!floatOn) return;
+      if (!ok) return floatTimers.push(setTimeout(() => spawnFloater(slot), 800));
+      showFloater(slot, src);
+    });
+  }
+  function showFloater(slot, src) {
     const small = innerWidth < 700;
     const el = document.createElement("button");
     el.className = "float-photo";
     el.dataset.src = src;
     el.innerHTML = '<img alt="" />';
-    el.querySelector("img").src = src;
+    el.querySelector("img").src = thumb(src);
     el.querySelector("img").onerror = () => el.remove();
     el.style.width = (small ? 92 : 150) + "px";
     const left = slot % 2 === 0;
@@ -305,15 +352,19 @@
       ring.appendChild(card);
     });
   }
-  function setPhoto(el, m) {
+  function setPhoto(el, m, full = false) {
     el.classList.remove("placeholder");
-    el.style.backgroundImage = "";
     el.innerHTML = "";
     const tok = (el._tok = (el._tok || 0) + 1);
-    resolvePhoto(m.photo).then((src) => {
+    const t = thumb(m.photo);
+    const show = (src) => { el.style.backgroundImage = `url("${src}")`; el.classList.remove("cooking"); };
+    if (readySet.has(t)) show(t);
+    else { el.style.backgroundImage = ""; el.classList.add("cooking"); }   // "cooking" gradient while it downloads
+    preload(t).then((ok) => {
       if (el._tok !== tok) return;
-      if (src) el.style.backgroundImage = `url("${src}")`;
-      else { el.classList.add("placeholder"); el.innerHTML = `<span>${m.emoji || "💗"}</span>`; }
+      if (!ok) { el.classList.remove("cooking"); el.classList.add("placeholder"); el.innerHTML = `<span>${m.emoji || "💗"}</span>`; return; }
+      show(t);
+      if (full && t !== m.photo) preload(m.photo).then((ok2) => { if (ok2 && el._tok === tok) show(m.photo); }); // sharpen in the big viewer
     });
   }
   function memLoop() {
@@ -345,6 +396,7 @@
   const sideWrap = $("#sideFrames");
   let sideTimers = [];
   const PLACEHOLDER_EMOJI = ["💖", "🌸", "✨", "🦋", "🌷", "💕", "🎀", "🌙"];
+  let sideOn = false;
   function buildSideFrames() {
     sideWrap.innerHTML = "";
     const small = innerWidth < 700;
@@ -354,37 +406,51 @@
       f.className = "mini-frame";
       f.style.left = x + "%";
       f.style.top = y + "%";
-      f.innerHTML = '<div class="mini-img"></div>';
+      f.innerHTML = '<div class="mini-img cooking"></div>';
       gsap.set(f, { rotation: rand(-10, 10) });
       sideWrap.appendChild(f);
-      fillMini(f);
       f.onclick = (e) => { e.stopPropagation(); if (f.dataset.src) openPhotoViewer(f.dataset.src, f.getBoundingClientRect()); };
     });
   }
-  function fillMini(f) {
+  function cycleMini(f) {
+    if (!sideOn || !f.isConnected) return;
     const img = f.querySelector(".mini-img");
-    const shown = Array.from(sideWrap.children).map((e) => e.dataset.src);
-    const src = randomPhoto(shown);
-    if (src) { img.classList.remove("placeholder"); img.textContent = ""; img.style.backgroundImage = `url("${src}")`; f.dataset.src = src; }
-    else { img.classList.add("placeholder"); img.textContent = pick(PLACEHOLDER_EMOJI); }
-  }
-  function flipMini(f) {
-    gsap.to(f, { rotationY: 90, duration: 0.18, ease: "power1.in", onComplete() {
-      fillMini(f);
-      gsap.to(f, { rotationY: 0, duration: 0.25, ease: "back.out(2)" });
+    const nextFlip = () => sideTimers.push(setTimeout(() => cycleMini(f), rand(1000, 1400)));
+    const flip = (mid, done) => gsap.to(f, { rotationY: 90, duration: 0.18, ease: "power1.in", onComplete() {
+      mid();
+      gsap.to(f, { rotationY: 0, duration: 0.25, ease: "back.out(2)", onComplete: done });
     } });
+    const shown = Array.from(sideWrap.children).map((e) => e.dataset.src);
+    const src = randomReadyPhoto(shown);
+    if (!src) { img.classList.remove("cooking"); img.classList.add("placeholder"); img.textContent = pick(PLACEHOLDER_EMOJI); return nextFlip(); }
+    const t = thumb(src);
+    const setImg = () => { img.classList.remove("placeholder", "cooking"); img.textContent = ""; img.style.backgroundImage = `url("${t}")`; f.dataset.src = src; };
+    if (readySet.has(t)) return flip(setImg, nextFlip);        // already downloaded: flip straight to it
+    // not downloaded yet: flip to the "cooking" gradient, reveal the photo once it arrives, then wait before the next flip
+    flip(() => { img.style.backgroundImage = ""; img.textContent = ""; img.classList.add("cooking"); f.dataset.src = ""; }, () => {
+      preload(t).then((ok) => {
+        if (!sideOn || !f.isConnected) return;
+        if (ok) { setImg(); gsap.fromTo(img, { opacity: 0.2, scale: 1.08 }, { opacity: 1, scale: 1, duration: 0.5 }); }
+        nextFlip();
+      });
+    });
   }
   function startSideFrames() {
     stopSideFrames();
-    Array.from(sideWrap.children).forEach((f, i) => {
-      sideTimers.push(setTimeout(() => sideTimers.push(setInterval(() => flipMini(f), 1000)), i * 170));
-    });
+    sideOn = true;
+    Array.from(sideWrap.children).forEach((f, i) => sideTimers.push(setTimeout(() => cycleMini(f), 300 + i * 220)));
   }
-  function stopSideFrames() { sideTimers.forEach((t) => { clearTimeout(t); clearInterval(t); }); sideTimers = []; }
+  function stopSideFrames() {
+    sideOn = false;
+    sideTimers.forEach(clearTimeout);
+    sideTimers = [];
+    gsap.killTweensOf(".mini-frame");
+  }
 
   enter.memories = () => {
     FX.audio.play(CFG.memoriesMusic);
     if (!ring.children.length) buildCarousel();
+    warmPhotos();
     poolReady.then(() => { if (ids[current] !== "memories") return; buildSideFrames(); startSideFrames(); gsap.from(".mini-frame", { scale: 0, opacity: 0, stagger: 0.1, duration: 0.6, ease: "back.out(2)" }); });
     gsap.from(ring, { scale: 0.3, opacity: 0, duration: 1.2, ease: "back.out(1.4)" });
     angle -= 180; vel = 6;
@@ -405,7 +471,7 @@
   function fillLightbox(i) {
     lbIndex = (i + lbItems.length) % lbItems.length;
     const m = lbItems[lbIndex];
-    setPhoto($("#lbImg"), m);
+    setPhoto($("#lbImg"), m, true);
     $("#lbTitle").textContent = m.title;
     $("#lbDate").textContent = m.date;
     $("#lbCaption").textContent = m.caption;
