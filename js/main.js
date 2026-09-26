@@ -554,22 +554,46 @@
     FX.audio.hush(true);
     $("#cakeSub").textContent = "🎶 happy birthday to youuu 🎶";
     if (CFG.cakeSong) {
-      // your own recording / sung version
+      // your own recording, with sing-along lines timed to it
       const a = new Audio(CFG.cakeSong);
-      a.volume = FX.audio.on ? 0.9 : 0;
-      a.onended = endSong;
-      a.onerror = () => { stopSong = null; FX.audio.hush(false); };
-      a.play().catch(() => {});
+      a.volume = FX.audio.on ? 1 : 0;
+      a.onerror = () => { stopSong = null; FX.audio.hush(false); stopSong = FX.audio.birthdaySong({ onWord: showLyricLine, onEnd: endSong }); };
+      const cues = CFG.cakeSongLyrics || [[0, `Happy birthday dear ${CFG.name}`]];
       const k = $("#karaoke");
-      k.innerHTML = `<span class="note">🎶 sing along 🎶</span><span class="w on">Happy birthday dear ${CFG.name.replace(/</g, "&lt;")}</span>`;
-      gsap.fromTo(k, { opacity: 0 }, { opacity: 1, duration: 0.6 });
-      stopSong = () => { a.pause(); endSong(); };
+      let shown = -1, raf = 0;
+      const tick = () => {
+        let i = -1;
+        cues.forEach(([at], j) => { if (a.currentTime >= at) i = j; });
+        if (i !== shown && i >= 0) {
+          shown = i;
+          k.innerHTML = `<span class="note">🎶 sing along 🎶</span><span class="w on">${String(cues[i][1]).replace(/</g, "&lt;")}</span>`;
+          gsap.fromTo(k.querySelector(".w"), { opacity: 0, y: 14, scale: 0.9 }, { opacity: 1, y: 0, scale: 1.08, duration: 0.45, ease: "back.out(2)" });
+          if (/anshika/i.test(cues[i][1])) FX.floatEmoji(innerWidth / 2, innerHeight * 0.26, ["💖", "🎂", "✨"], 6);
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      gsap.set(k, { opacity: 1 });
+      a.onended = () => { cancelAnimationFrame(raf); FX.audio.songEl = null; endSong(); };
+      a.play().then(() => (raf = requestAnimationFrame(tick))).catch(() => {});
+      FX.audio.songEl = a;
+      stopSong = () => { cancelAnimationFrame(raf); a.pause(); FX.audio.songEl = null; };
       return;
     }
     stopSong = FX.audio.birthdaySong({ onWord: showLyricLine, onEnd: endSong });
   }
+  // "Happy Birthday Anshika" posters hanging in the empty side areas
+  const posterName = (CFG.posterName || CFG.name).replace(/(.)\1{2,}$/, "$1"); // "Anshikaaaaaa" → "Anshika"
+  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+  $("#posters").innerHTML = `
+    ${["HAPPY", "BIRTHDAY"].map((word, g) => `<div class="garland ${g ? "g-right" : "g-left"}">${word.split("").map((ch, i) => `<span class="flag f${(i + g * 2) % 5}">${ch}</span>`).join("")}</div>`).join("")}
+    <div class="poster neon p-left"><i class="pin"></i><b>Happy</b><b>Birthday</b><small>${esc(posterName)} ✨</small></div>
+    <div class="poster gold p-right"><i class="pin"></i><small>happy birthday</small><strong>${esc(posterName).toUpperCase()}</strong><em>${esc(CFG.age || "")}</em><small>👑 birthday queen 👑</small></div>
+    <div class="poster ribbon p-left2"><i class="pin"></i><span>🎀</span><b>Birthday</b><b>Girl</b><span>🎀</span></div>
+    <div class="poster neon-star p-right2"><i class="pin"></i><span class="wish-star">🌟</span><b>make a wish</b><small>${esc(posterName)}</small></div>`;
   enter.cake = () => {
     FX.setAmbient(0.2);
+    gsap.fromTo("#posters .poster", { y: -260, opacity: 0 }, { y: 0, opacity: 1, duration: 1.1, stagger: 0.15, ease: "bounce.out", delay: 0.3 });
+    gsap.fromTo("#posters .flag", { y: -60, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, stagger: 0.04, ease: "back.out(2)", delay: 0.2 });
     clearTimeout(songTimer);
     songTimer = setTimeout(playBirthdaySong, 900);
     if (!cake) {

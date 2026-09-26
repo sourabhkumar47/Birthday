@@ -43,11 +43,25 @@ window.BIRTHDAY = {
   // The main song fades back in when she leaves that page.
   memoriesMusic: "assets/music/tum-se-hi.mp3",
 
-  // 🎂 Birthday song on the cake page. Leave "" to use the built-in music-box
-  // Happy Birthday with sing-along lyrics ("…happy birthday dear <name>").
-  // Or put a sung version in assets/music/ (e.g. you singing it! 🎤) and set:
-  //   cakeSong: "assets/music/happy-birthday.mp3",
-  cakeSong: "",
+  // 🎂 Birthday song on the cake page: YOUR recording 🎤, cleaned up (background
+  // noise reduced) with soft piano + music-box backing tuned to your voice.
+  // (Original phone recording: assets/music/happy-birthday-original-recording.mp4)
+  // Set cakeSong: "" to use the built-in music-box version instead.
+  cakeSong: "assets/music/happy-birthday-by-sourabh.m4a",
+
+  // Sing-along lines shown while your song plays: [seconds into the song, text].
+  // Timed to the 7 phrases in your recording. Change the words to exactly what you sang!
+  cakeSongLyrics: [
+    [0, "a little song, just for you… 🎤"],
+    [4.7, "Happy birthday to you"],
+    [8.05, "Happy birthday to you"],
+    [11.9, "Happy birthday dear"],
+    [14.85, "Anshikaaaa 💖"],
+    [16.3, "Happy birthday"],
+    [18.15, "to youuu 🎶"],
+    [22.1, "Happy birthday Anshika 🎂"],
+    [24.6, "💖💖💖"],
+  ],
 
   /* 🖼️ PHOTO GALLERY ------------------------------------------------------
      These photos float around the balloon world, appear inside every

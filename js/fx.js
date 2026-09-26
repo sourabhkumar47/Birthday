@@ -61,6 +61,7 @@
       if (this.on) { this.music.volume = this.songActive ? 0 : BASE_VOL; this.music.play().catch(() => {}); }
       else this.music.pause();
       if (this.songMaster) this.songMaster.gain.value = this.on ? 0.5 : 0;
+      if (this.songEl) this.songEl.volume = this.on ? 1 : 0;
       return this.on;
     },
     // fade the current background song down (during the birthday song) and back up

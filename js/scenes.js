@@ -870,9 +870,10 @@
       },
       resize(w, h) {
         camera.aspect = w / h;
-        const z = camera.aspect < 1 ? 11.5 / Math.max(camera.aspect * 1.25, 0.55) : 11.5;
-        camera.position.set(0, 5.4 + (z - 11.5) * 0.25, z);
-        camera.lookAt(0, 2.4, 0);
+        const wide = camera.aspect >= 1;
+        const z = wide ? 13.5 : 11.5 / Math.max(camera.aspect * 1.25, 0.55);
+        camera.position.set(0, wide ? 5.6 : 5.4 + (z - 11.5) * 0.25, z);
+        camera.lookAt(0, wide ? 3.1 : 2.4, 0); // wide screens: cake sits lower so the lyrics fit above it
         camera.updateProjectionMatrix();
       },
       onDrag(dx) { targetY += dx * 0.01; idle = 0; },
